@@ -1,0 +1,14 @@
+Analysis & Synthesis Status : Successful - Fri Jun 26 18:16:35 2026
+Quartus Prime Version : 22.1std.0 Build 915 10/25/2022 SC Lite Edition
+Revision Name : trabaio
+Top-level Entity Name : DE2_115
+Family : Cyclone IV E
+Total logic elements : 2,981
+    Total combinational functions : 1,737
+    Dedicated logic registers : 1,342
+Total registers : 1342
+Total pins : 106
+Total virtual pins : 0
+Total memory bits : 0
+Embedded Multiplier 9-bit elements : 0
+Total PLLs : 0
