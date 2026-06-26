@@ -1,0 +1,637 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{times}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{indentfirst}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{booktabs}
+
+\geometry{a4paper,left=3cm,right=2cm,top=3cm,bottom=2cm}
+\onehalfspacing
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0.15cm}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue
+}
+
+\lstdefinestyle{verilogstyle}{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    keywordstyle=\bfseries,
+    commentstyle=\itshape,
+    showstringspaces=false,
+    tabsize=4,
+    columns=fullflexible
+}
+
+\lstdefinestyle{textstyle}{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    showstringspaces=false,
+    tabsize=4,
+    columns=fullflexible
+}
+
+\begin{document}
+
+\begin{titlepage}
+    \begin{center}
+        \textbf{UNIVERSIDADE FEDERAL DE VIÇOSA}\\
+        \textbf{CAMPUS DE FLORESTAL}\\
+        \textbf{INSTITUTO DE CIÊNCIAS EXATAS E TECNOLÓGICAS}\\
+        \textbf{CIÊNCIA DA COMPUTAÇÃO}\\
+        \vspace{4cm}
+
+        \textbf{Relatório - Trabalho Prático 02}\\
+        \textbf{Caminho de Dados do RISC-V}\\
+        \vspace{0.5cm}
+        \textbf{CCF 252 - Organização de Computadores I}\\
+        \vspace{4cm}
+
+        \textbf{VINÍCIUS ARRUDA MELO MIRANDA - 5930}\\
+        \textbf{Grupo 22}\\
+        \vfill
+
+        \textbf{Florestal - MG}\\
+        \textbf{2026}
+    \end{center}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introdução}
+
+Neste trabalho prático foi implementada uma versão simplificada do caminho de dados do RISC-V utilizando Verilog/SystemVerilog. O objetivo principal foi permitir a execução de um subconjunto específico de instruções, verificando o funcionamento integrado entre contador de programa, memória de instruções, banco de registradores, unidade de controle, ALU, memória de dados e multiplexadores.
+
+O projeto foi dividido em duas partes. Na primeira parte, o processador foi simulado no computador utilizando um testbench com clock automático, permitindo observar os registradores e a memória de dados pelo terminal. Na segunda parte, o caminho de dados foi adaptado para síntese no Quartus Prime e execução na placa DE2-115, com exibição do contador de programa e dos registradores em displays de sete segmentos e LEDs.
+
+\section{Desenvolvimento}
+
+\subsection{Subconjunto de instruções}
+
+O grupo 22 ficou responsável pela implementação das seguintes instruções RISC-V:
+
+\begin{itemize}
+    \item \textbf{lb} - carrega um byte da memória de dados para um registrador, com extensão de sinal;
+    \item \textbf{sb} - armazena um byte de um registrador na memória de dados;
+    \item \textbf{sub} - realiza subtração entre dois registradores;
+    \item \textbf{and} - realiza operação lógica AND entre dois registradores;
+    \item \textbf{ori} - realiza operação lógica OR entre registrador e imediato;
+    \item \textbf{srl} - realiza deslocamento lógico à direita;
+    \item \textbf{beq} - realiza desvio condicional quando dois registradores possuem valores iguais.
+\end{itemize}
+
+Essas instruções exigem suporte a formatos diferentes do RISC-V: tipo R para \textit{sub}, \textit{and} e \textit{srl}; tipo I para \textit{lb} e \textit{ori}; tipo S para \textit{sb}; e tipo B para \textit{beq}.
+
+\subsection{Arquivos e módulos do projeto}
+
+A implementação foi organizada em módulos, seguindo a estrutura do caminho de dados utilizado em aula. A Tabela \ref{tab:modulos} resume a função de cada módulo.
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{4cm} >{\raggedright\arraybackslash}p{10cm}}
+\caption{Principais módulos utilizados no projeto.}\label{tab:modulos}\\
+\toprule
+\textbf{Módulo} & \textbf{Função no projeto} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Módulo} & \textbf{Função no projeto} \\
+\midrule
+\endhead
+\texttt{alu} & Executa operações aritméticas e lógicas, como soma para cálculo de endereço, subtração, AND, OR e deslocamento lógico à direita. \\
+\texttt{Alu\_Control} & Define a operação da ALU a partir do \texttt{aluOp}, \texttt{funct3} e \texttt{funct7}. \\
+\texttt{Control} & Gera os sinais de controle do processador a partir do opcode da instrução. \\
+\texttt{immGen} & Extrai e estende os imediatos das instruções dos tipos I, S e B. \\
+\texttt{Reg\_mem} & Implementa o banco de 32 registradores do RISC-V, mantendo o registrador x0 sempre igual a zero. \\
+\texttt{data\_mem} & Implementa a memória de dados utilizada pelas instruções \textit{lb} e \textit{sb}. \\
+\texttt{Instruction\_mem} & Armazena as instruções manualmente no código, sem uso de \texttt{\$readmemb} ou \texttt{\$readmemh}. \\
+\texttt{pc} & Armazena o valor atual do Program Counter. \\
+\texttt{data\_pathR5} & Integra todos os módulos do caminho de dados. \\
+\texttt{button\_pulse} & Gera pulsos a partir dos botões físicos da FPGA, reduzindo múltiplas leituras indesejadas. \\
+\texttt{seg7} & Converte valores binários em sinais para displays de sete segmentos. \\
+\texttt{DE2\_115} & Módulo principal da implementação física na placa, conectando botões, switches, LEDs e displays ao processador. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Unidade de controle}
+
+A unidade de controle recebe o opcode da instrução e gera os sinais necessários para definir o comportamento do caminho de dados. No caso do grupo 22, foram tratados os opcodes das instruções de carga, armazenamento, tipo R, tipo I e desvio condicional.
+
+\begin{lstlisting}[style=verilogstyle,caption={Trecho principal da unidade de controle.}]
+module Control(opcode, branch, memRead, memToReg, aluOp,
+               memWrite, aluSrc, regWrite);
+    input  [6:0] opcode;
+    output reg branch, memRead, memToReg, memWrite, aluSrc, regWrite;
+    output reg [1:0] aluOp;
+
+    always @(*) begin
+        branch   = 1'b0;
+        memRead  = 1'b0;
+        memToReg = 1'b0;
+        aluOp    = 2'b00;
+        memWrite = 1'b0;
+        aluSrc   = 1'b0;
+        regWrite = 1'b0;
+
+        case (opcode)
+            7'b0000011: begin // lb
+                memRead  = 1'b1;
+                memToReg = 1'b1;
+                aluSrc   = 1'b1;
+                regWrite = 1'b1;
+            end
+
+            7'b0100011: begin // sb
+                memWrite = 1'b1;
+                aluSrc   = 1'b1;
+            end
+
+            7'b0110011: begin // sub, and, srl
+                aluOp    = 2'b10;
+                regWrite = 1'b1;
+            end
+
+            7'b0010011: begin // ori
+                aluOp    = 2'b11;
+                aluSrc   = 1'b1;
+                regWrite = 1'b1;
+            end
+
+            7'b1100011: begin // beq
+                branch = 1'b1;
+                aluOp  = 2'b01;
+            end
+        endcase
+    end
+endmodule
+\end{lstlisting}
+
+Para \textit{lb}, a ALU calcula o endereço, a memória é lida e o valor retorna para o registrador. Para \textit{sb}, a memória é escrita, mas nenhum registrador recebe valor. Para instruções tipo R, a escrita no banco de registradores é habilitada. Para \textit{beq}, o sinal \texttt{branch} é ativado e a ALU realiza uma subtração para verificar se os dois operandos são iguais.
+
+\subsection{Controle da ALU}
+
+O módulo \texttt{Alu\_Control} traduz o sinal \texttt{aluOp}, gerado pela unidade de controle, junto com os campos \texttt{funct3} e \texttt{funct7}, para selecionar a operação correta da ALU.
+
+\begin{lstlisting}[style=verilogstyle,caption={Trecho principal do controle da ALU.}]
+module Alu_Control(funct7, funct3, aluOp, aluCtrl);
+    input  [6:0] funct7;
+    input  [2:0] funct3;
+    input  [1:0] aluOp;
+    output reg [3:0] aluCtrl;
+
+    always @(*) begin
+        case (aluOp)
+            2'b00: aluCtrl = 4'b0000; // endereco lb/sb
+            2'b01: aluCtrl = 4'b0001; // comparacao do beq
+
+            2'b10: begin
+                case (funct3)
+                    3'b000: aluCtrl = (funct7 == 7'b0100000)
+                                      ? 4'b0001 : 4'b0000; // sub
+                    3'b111: aluCtrl = 4'b0010; // and
+                    3'b101: aluCtrl = 4'b0100; // srl
+                    default: aluCtrl = 4'b0000;
+                endcase
+            end
+
+            2'b11: begin
+                case (funct3)
+                    3'b110: aluCtrl = 4'b0011; // ori
+                    default: aluCtrl = 4'b0000;
+                endcase
+            end
+
+            default: aluCtrl = 4'b0000;
+        endcase
+    end
+endmodule
+\end{lstlisting}
+
+A separação entre \texttt{Control} e \texttt{Alu\_Control} torna o projeto mais organizado, pois a unidade principal identifica o tipo geral de instrução, enquanto o controle da ALU escolhe a operação específica.
+
+\subsection{ALU}
+
+A ALU implementada suporta soma, subtração, AND, OR e deslocamento lógico à direita. A soma é utilizada principalmente para calcular o endereço de memória em \textit{lb} e \textit{sb}. A subtração é usada tanto pela instrução \textit{sub} quanto pela comparação da instrução \textit{beq}.
+
+\begin{lstlisting}[style=verilogstyle,caption={Operações implementadas na ALU.}]
+module alu(inputA, inputB, aluCtrl, aluResult, zero);
+    input  [31:0] inputA, inputB;
+    input  [3:0]  aluCtrl;
+    output reg [31:0] aluResult;
+    output zero;
+
+    always @(*) begin
+        case (aluCtrl)
+            4'b0000: aluResult = inputA + inputB;
+            4'b0001: aluResult = inputA - inputB;
+            4'b0010: aluResult = inputA & inputB;
+            4'b0011: aluResult = inputA | inputB;
+            4'b0100: aluResult = inputA >> inputB[4:0];
+            default: aluResult = 32'b0;
+        endcase
+    end
+
+    assign zero = (aluResult == 32'b0);
+endmodule
+\end{lstlisting}
+
+O sinal \texttt{zero} é utilizado no desvio condicional. Quando a subtração entre os dois registradores do \textit{beq} resulta em zero, significa que os valores são iguais e o branch deve ser tomado.
+
+\subsection{Gerador de imediatos}
+
+Como as instruções possuem formatos diferentes, o imediato precisa ser extraído de posições diferentes da instrução. O módulo \texttt{immGen} trata os formatos I, S e B.
+
+\begin{lstlisting}[style=verilogstyle,caption={Extração dos imediatos no módulo immGen.}]
+module immGen(instruction, immediate);
+    input  [31:0] instruction;
+    output reg [31:0] immediate;
+
+    wire [6:0] opcode;
+    assign opcode = instruction[6:0];
+
+    always @(*) begin
+        case (opcode)
+            7'b0000011, // lb
+            7'b0010011: // ori
+                immediate = {{20{instruction[31]}}, instruction[31:20]};
+
+            7'b0100011: // sb
+                immediate = {{20{instruction[31]}},
+                             instruction[31:25], instruction[11:7]};
+
+            7'b1100011: // beq
+                immediate = {{19{instruction[31]}}, instruction[31],
+                             instruction[7], instruction[30:25],
+                             instruction[11:8], 1'b0};
+
+            default:
+                immediate = 32'b0;
+        endcase
+    end
+endmodule
+\end{lstlisting}
+
+No caso do \textit{beq}, o último bit do imediato é sempre zero, pois o endereço de destino precisa estar alinhado. Por isso, o imediato é montado com \texttt{1'b0} no final.
+
+\subsection{Banco de registradores}
+
+O banco de registradores possui 32 posições de 32 bits, seguindo a arquitetura RISC-V. O registrador x0 é mantido sempre com valor zero, mesmo que alguma instrução tente escrever nele.
+
+\begin{lstlisting}[style=verilogstyle,caption={Escrita no banco de registradores.}]
+always @(posedge clock or posedge reset) begin
+    if (reset) begin
+        for (i = 0; i < 32; i = i + 1)
+            registers[i] <= 32'b0;
+    end
+    else begin
+        if (regWrite && writeReg != 5'b00000)
+            registers[writeReg] <= writeData;
+
+        registers[0] <= 32'b0;
+    end
+end
+
+assign readData1 = (readReg1 == 5'b00000) ? 32'b0 : registers[readReg1];
+assign readData2 = (readReg2 == 5'b00000) ? 32'b0 : registers[readReg2];
+\end{lstlisting}
+
+Na versão para FPGA foi adicionado um sinal de depuração, permitindo selecionar e exibir o valor de um registrador específico nos displays e LEDs.
+
+\subsection{Memória de dados}
+
+A memória de dados foi implementada como uma memória endereçada por byte, pois o grupo utiliza as instruções \textit{lb} e \textit{sb}. A instrução \textit{sb} grava apenas os 8 bits menos significativos do registrador, e a instrução \textit{lb} carrega um byte da memória com extensão de sinal.
+
+\begin{lstlisting}[style=verilogstyle,caption={Leitura e escrita de byte na memória de dados.}]
+always @(posedge clock or posedge reset) begin
+    if (reset) begin
+        for (i = 0; i < 128; i = i + 1)
+            memory[i] <= 8'b0;
+    end
+    else if (memWrite) begin
+        memory[address[6:0]] <= writeData[7:0];
+    end
+end
+
+always @(*) begin
+    if (memRead)
+        readData = {{24{memory[address[6:0]][7]}},
+                    memory[address[6:0]]};
+    else
+        readData = 32'b0;
+end
+\end{lstlisting}
+
+Essa implementação permite testar o comportamento específico das instruções de byte. No programa utilizado, o valor 7 é salvo na posição zero da memória por \textit{sb} e depois carregado para o registrador x6 por \textit{lb}.
+
+\subsection{Memória de instruções}
+
+Na versão final, as instruções foram inseridas diretamente no código Verilog. Isso foi necessário para deixar a memória de instruções adequada à síntese no Quartus, sem depender de leitura externa por arquivo.
+
+\begin{lstlisting}[style=verilogstyle,caption={Instruções inseridas manualmente na memória de instruções.}]
+always @(*) begin
+    case (address[6:2])
+        5'd0: instruction = 32'b00000000101000000110000010010011;
+        5'd1: instruction = 32'b00000000001100000110000100010011;
+        5'd2: instruction = 32'b01000000001000001000000110110011;
+        5'd3: instruction = 32'b00000000001100001111001000110011;
+        5'd4: instruction = 32'b00000000001000001101001010110011;
+        5'd5: instruction = 32'b00000000001100000000000000100011;
+        5'd6: instruction = 32'b00000000000000000000001100000011;
+        5'd7: instruction = 32'b00000000001100110000010001100011;
+        5'd8: instruction = 32'b00000110001100000110001110010011;
+        5'd9: instruction = 32'b00000000111100000110010000010011;
+        default: instruction = 32'b0;
+    endcase
+end
+\end{lstlisting}
+
+Como o PC trabalha com endereços em bytes, avançando de 4 em 4, foi utilizado \texttt{address[6:2]} para transformar o endereço do PC em índice da memória de instruções. Assim, os endereços 0, 4, 8 e 12 passam a acessar as posições 0, 1, 2 e 3 da memória.
+
+\subsection{Caminho de dados}
+
+O módulo \texttt{data\_pathR5} integra todos os blocos do processador. Ele conecta o PC à memória de instruções, envia os campos da instrução para a unidade de controle, banco de registradores e gerador de imediatos, e define o fluxo dos dados até a ALU e a memória de dados.
+
+\begin{lstlisting}[style=verilogstyle,caption={Integração dos principais módulos no caminho de dados.}]
+pc pcDP(pcInDP, pcOutDP, clockDP, resetDP, enableDP);
+Instruction_mem insMem(pcOutDP, instructionDP);
+
+Control ctrlDP(
+    instructionDP[6:0], branchDP, memReadDP, memToRegDP,
+    aluOpDP, memWriteDP, aluSrcDP, regWriteDP
+);
+
+Reg_mem regMem(
+    clockDP, resetDP, enableDP, regWriteDP,
+    instructionDP[19:15], instructionDP[24:20],
+    instructionDP[11:7], writeRegDataDP,
+    readData1DP, readData2DP,
+    debugRegAddr, debugRegData
+);
+
+immGen immGenDP(instructionDP, immGenOutDP);
+Alu_Control aluControlDP(
+    instructionDP[31:25], instructionDP[14:12],
+    aluOpDP, aluCtrlDP
+);
+
+mux2In muxAlu(readData2DP, immGenOutDP, muxAluOutDP, aluSrcDP);
+alu aluDP(readData1DP, muxAluOutDP, aluCtrlDP, aluOutDP, aluZeroDP);
+\end{lstlisting}
+
+A atualização do PC ocorre por meio de dois caminhos possíveis: o próximo endereço sequencial, obtido por \texttt{PC + 4}, ou o endereço de branch, obtido por \texttt{PC + imediato}. O multiplexador final escolhe entre essas opções de acordo com o resultado do \textit{beq}.
+
+\begin{lstlisting}[style=verilogstyle,caption={Atualização do PC e decisão de branch.}]
+somador add4(32'd4, pcOutDP, add4OutDP);
+somador addBranch(pcOutDP, immGenOutDP, addBranchDP);
+
+assign branchTakenDP = branchDP & aluZeroDP;
+
+mux2In muxPC(add4OutDP, addBranchDP, pcInDP, branchTakenDP);
+\end{lstlisting}
+
+\section{Simulação}
+
+Para a simulação foi utilizado um testbench em Verilog com clock automático. A simulação executa o programa gravado na memória de instruções e, ao final, imprime os 32 registradores e as primeiras posições da memória de dados.
+
+\subsection{Comando utilizado}
+
+A simulação foi executada com o Icarus Verilog no terminal:
+
+\begin{lstlisting}[style=textstyle,caption={Comando utilizado para compilar e executar a simulação.}]
+iverilog -g2012 -o grupo22.vvp grupo22_limpo.v
+vvp grupo22.vvp
+\end{lstlisting}
+
+\subsection{Código de teste em ASM}
+
+\begin{lstlisting}[style=textstyle,caption={Programa de teste em Assembly.}]
+ori x1, x0, 10
+ori x2, x0, 3
+sub x3, x1, x2
+and x4, x1, x3
+srl x5, x1, x2
+sb  x3, 0(x0)
+lb  x6, 0(x0)
+beq x6, x3, 8
+ori x7, x0, 99
+ori x8, x0, 15
+\end{lstlisting}
+
+Esse programa foi escolhido para exercitar todas as instruções do grupo. As duas primeiras instruções inicializam os registradores x1 e x2 com os valores 10 e 3. Em seguida, são testadas as operações \textit{sub}, \textit{and} e \textit{srl}. Depois, \textit{sb} salva o valor de x3 na memória, e \textit{lb} carrega esse valor para x6. Por fim, \textit{beq} compara x6 e x3. Como os dois possuem o valor 7, a instrução que escreveria em x7 é pulada.
+
+\subsection{Código em linguagem de máquina}
+
+\begin{lstlisting}[style=textstyle,caption={Instruções em binário inseridas no processador.}]
+00000000101000000110000010010011
+00000000001100000110000100010011
+01000000001000001000000110110011
+00000000001100001111001000110011
+00000000001000001101001010110011
+00000000001100000000000000100011
+00000000000000000000001100000011
+00000000001100110000010001100011
+00000110001100000110001110010011
+00000000111100000110010000010011
+\end{lstlisting}
+
+\subsection{Resultados esperados da simulação}
+
+Ao final da execução, os registradores relevantes devem apresentar os seguintes valores:
+
+\begin{center}
+\begin{tabular}{c c l}
+\toprule
+\textbf{Registrador} & \textbf{Valor esperado} & \textbf{Justificativa} \\
+\midrule
+x1 & 10 & valor carregado por \textit{ori} \\
+x2 & 3 & valor carregado por \textit{ori} \\
+x3 & 7 & resultado de \textit{sub x3, x1, x2} \\
+x4 & 2 & resultado de \textit{and x4, x1, x3} \\
+x5 & 1 & resultado de \textit{srl x5, x1, x2} \\
+x6 & 7 & valor carregado da memória por \textit{lb} \\
+x7 & 0 & instrução pulada pelo \textit{beq} \\
+x8 & 15 & valor executado após o desvio \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Na memória de dados, a posição zero deve conter o valor 7, pois a instrução \textit{sb x3, 0(x0)} armazena o byte menos significativo de x3 nessa posição.
+
+\section{Quartus e FPGA}
+
+A segunda parte consistiu na adaptação do processador para síntese no Quartus Prime e execução na placa DE2-115. O projeto foi configurado para o dispositivo \texttt{EP4CE115F29C7}, pertencente à família Cyclone IV E.
+
+\subsection{Configuração do projeto no Quartus}
+
+No Quartus, foi criado um projeto com o módulo principal \texttt{DE2\_115}. Esse módulo conecta o processador aos recursos físicos da placa, como botões, switches, LEDs e displays de sete segmentos.
+
+\begin{lstlisting}[style=textstyle,caption={Configurações principais do projeto no Quartus.}]
+Family: Cyclone IV E
+Device: EP4CE115F29C7
+Top-level entity: DE2_115
+Arquivo principal: grupo22_fpga.v
+Arquivo de restricao de tempo: trabaio.sdc
+\end{lstlisting}
+
+Também foi utilizado um arquivo de pinagem para associar os sinais do módulo \texttt{DE2\_115} aos pinos físicos da placa. A restrição de clock foi definida no arquivo \texttt{trabaio.sdc}, considerando o clock de 50 MHz da placa.
+
+\begin{lstlisting}[style=textstyle,caption={Restrição de clock utilizada no arquivo trabaio.sdc.}]
+create_clock -name CLOCK_50 -period 20.000 [get_ports {CLOCK_50}]
+\end{lstlisting}
+
+\subsection{Módulo principal da FPGA}
+
+O módulo \texttt{DE2\_115} é responsável por controlar a interação entre a placa e o processador. Nele são definidos os botões utilizados para reset, clock manual e seleção do registrador exibido.
+
+\begin{lstlisting}[style=verilogstyle,caption={Entradas e saídas principais do módulo DE2\_115.}]
+module DE2_115(
+    input CLOCK_50,
+    input [3:0] KEY,
+    input [17:0] SW,
+    output [17:0] LEDR,
+    output [8:0] LEDG,
+    output [6:0] HEX0,
+    output [6:0] HEX1,
+    output [6:0] HEX2,
+    output [6:0] HEX3,
+    output [6:0] HEX4,
+    output [6:0] HEX5,
+    output [6:0] HEX6,
+    output [6:0] HEX7
+);
+\end{lstlisting}
+
+A placa utiliza os botões \texttt{KEY} com lógica ativa em nível baixo. Por isso, o reset foi definido a partir da inversão de \texttt{KEY[1]}.
+
+\begin{lstlisting}[style=verilogstyle,caption={Mapeamento dos botões principais.}]
+assign reset = ~KEY[1];
+
+button_pulse botaoClock(CLOCK_50, reset, KEY[0], stepPulse);
+button_pulse botaoReg(CLOCK_50, reset, KEY[2], regPulse);
+\end{lstlisting}
+
+Assim, o \texttt{KEY0} funciona como clock manual, avançando uma instrução por vez, o \texttt{KEY1} funciona como reset, e o \texttt{KEY2} muda o registrador mostrado nos displays e LEDs.
+
+\subsection{Exibição do PC e dos registradores}
+
+Para atender à parte extra, o projeto permite visualizar tanto o PC quanto um registrador escolhido. O PC é exibido nos displays \texttt{HEX6} e \texttt{HEX7}. O índice do registrador selecionado é exibido em \texttt{HEX4} e \texttt{HEX5}. O valor do registrador é exibido em \texttt{HEX0} até \texttt{HEX3} e também nos LEDs vermelhos.
+
+\begin{lstlisting}[style=verilogstyle,caption={Exibição do valor do registrador e do índice selecionado.}]
+assign LEDR = regValue[17:0];
+assign LEDG[4:0] = regIndex;
+assign LEDG[8:5] = 4'b0000;
+
+seg7 h0(regValue[3:0], HEX0);
+seg7 h1(regValue[7:4], HEX1);
+seg7 h2(regValue[11:8], HEX2);
+seg7 h3(regValue[15:12], HEX3);
+
+seg7 h4(regOnes, HEX4);
+seg7 h5(regTens, HEX5);
+
+seg7 h6(pcOnes, HEX6);
+seg7 h7(pcTens, HEX7);
+\end{lstlisting}
+
+A navegação entre registradores é feita com \texttt{KEY2}. O switch \texttt{SW1} define se a navegação será crescente ou decrescente.
+
+\begin{lstlisting}[style=verilogstyle,caption={Seleção do registrador exibido na FPGA.}]
+always @(posedge CLOCK_50 or posedge reset) begin
+    if (reset)
+        regIndex <= 5'd0;
+    else if (regPulse) begin
+        if (SW[1])
+            regIndex <= (regIndex == 5'd0) ? 5'd31 : regIndex - 5'd1;
+        else
+            regIndex <= (regIndex == 5'd31) ? 5'd0 : regIndex + 5'd1;
+    end
+end
+\end{lstlisting}
+
+\subsection{Comandos na placa}
+
+A organização dos comandos físicos ficou definida da seguinte forma:
+
+\begin{center}
+\begin{tabular}{c l}
+\toprule
+\textbf{Entrada/Saída} & \textbf{Função} \\
+\midrule
+KEY0 & Clock manual, executando uma instrução por acionamento. \\
+KEY1 & Reset do processador. \\
+KEY2 & Alterna o registrador exibido. \\
+SW1 & Define a direção da navegação entre registradores. \\
+HEX6 e HEX7 & Exibição do PC. \\
+HEX4 e HEX5 & Exibição do índice do registrador selecionado. \\
+HEX0 a HEX3 & Exibição do valor do registrador selecionado. \\
+LEDG0 a LEDG4 & Exibição binária do índice do registrador. \\
+LEDR0 a LEDR17 & Exibição binária do valor do registrador. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A execução física foi demonstrada em vídeo, mostrando o reset, o avanço do PC, o salto produzido pelo \textit{beq} e a consulta dos registradores relevantes.
+
+\section{Resultados}
+
+\subsection{Resultado da simulação}
+
+A simulação demonstrou que o caminho de dados executou corretamente as instruções do grupo 22. O resultado final esperado foi obtido nos registradores principais: x1 recebeu 10, x2 recebeu 3, x3 recebeu 7, x4 recebeu 2, x5 recebeu 1, x6 recebeu 7, x7 permaneceu zerado e x8 recebeu 15.
+
+O valor de x7 permanecer em zero é importante porque comprova o funcionamento da instrução \textit{beq}. Como x6 e x3 tinham o mesmo valor, o desvio foi tomado e a instrução que atribuiria 99 a x7 foi ignorada. Em seguida, o fluxo do programa continuou na instrução que atribuiu 15 a x8.
+
+\subsection{Resultado no Quartus}
+
+O projeto foi compilado no Quartus Prime Lite para a placa DE2-115. A compilação completa foi concluída com zero erros, permitindo a geração do arquivo \texttt{.sof} utilizado para programação da FPGA. Durante o processo, foram configurados o dispositivo \texttt{EP4CE115F29C7}, o módulo principal \texttt{DE2\_115}, o arquivo de pinagem da placa e o arquivo de restrição de clock \texttt{trabaio.sdc}.
+
+\subsection{Resultado na FPGA}
+
+Na placa, o \texttt{KEY1} foi utilizado para resetar o processador e o \texttt{KEY0} para avançar uma instrução por vez. O PC foi exibido nos displays \texttt{HEX6} e \texttt{HEX7}. Ao executar a instrução \textit{beq}, o PC saltou da instrução correspondente ao desvio para a instrução de destino, pulando a instrução que escreveria em x7.
+
+O \texttt{KEY2} permitiu navegar entre os registradores, enquanto o \texttt{SW1} definiu a direção da navegação. Os valores dos registradores puderam ser conferidos nos displays e LEDs, incluindo x3 = 7, x6 = 7, x7 = 0 e x8 = 15.
+
+\section{Código no GitHub}
+
+Os arquivos do projeto foram organizados no GitHub contendo o código Verilog, arquivos de simulação, projeto do Quartus, código Assembly de teste, instruções em binário, estado inicial dos registradores e estado inicial da memória de dados.
+
+\section{Código Github}
+
+O código-fonte completo do projeto, incluindo os arquivos Verilog, arquivos de entrada, documentação e projeto do Quartus, está disponível em:
+
+\url{https://github.com/vini-amm/tp02-grupo22-riscv}
+
+
+\section{Considerações finais}
+
+A implementação do caminho de dados simplificado do RISC-V para o grupo 22 permitiu verificar o funcionamento integrado de diferentes componentes da arquitetura. O projeto exigiu a implementação de instruções aritméticas, lógicas, de acesso à memória e de desvio condicional.
+
+A simulação foi importante para validar o comportamento do processador antes da síntese. Em seguida, a adaptação para a placa DE2-115 exigiu a criação do módulo principal da FPGA, a configuração dos botões, displays e LEDs, além da definição da pinagem e do arquivo de restrição de clock no Quartus.
+
+Como melhoria, o processador poderia ser expandido para aceitar mais instruções do conjunto RISC-V, além de utilizar uma memória de instruções mais flexível e um mecanismo mais completo de depuração na placa.
+
+\begin{thebibliography}{9}
+
+\bibitem{patterson}
+PATTERSON, David A.; HENNESSY, John L. \textit{Computer Organization and Design RISC-V Edition: The Hardware Software Interface}. Morgan Kaufmann, 2017.
+
+\bibitem{riscv}
+RISC-V Interpreter. Disponível em: \url{https://www.cs.cornell.edu/courses/cs3410/2019sp/riscv/interpreter/}. Acesso em: jun. 2026.
+
+\end{thebibliography}
+
+\end{document}
